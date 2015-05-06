@@ -1,10 +1,9 @@
 package esy.es.tennis.shared;
 
-import java.awt.*;
-
 public interface TennisAppConstants
 {
     int PORT_NUMBER = 11223;
+    int UDP_PORT_NUMBER = 11224;
     String separator = "|";
     String notification = "NOTIF";
     String disconnect = "DISCONNECT";
@@ -17,6 +16,8 @@ public interface TennisAppConstants
     int paletteWidth = 70;
     int paletteHeight = 10;
     int ballDiameter = 10;
-    int moveSpeed = 7;
+    int moveSpeed = 15;
     int ballSpeed = 1;
+    int[] hitPlaces = { 5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 100 };
+    int[] stepX = { -3, -2, -2, -1, -1, 0, 1, 1, 2, 2, 3 };
 }

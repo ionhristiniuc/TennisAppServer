@@ -5,7 +5,6 @@ import esy.es.tennis.shared.Palette;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Function;
 
 import static esy.es.tennis.shared.TennisAppConstants.*;
 
@@ -91,43 +90,77 @@ public class Board
             {
                 try
                 {
-                    Thread.sleep(8);
+                    Thread.sleep(5);
                 }
                 catch (InterruptedException e)
                 {
                     e.printStackTrace();
                 }
 
-                if (getBall().getX() + stepX < 0 || getBall().getX() + stepX > getWidth() - getBall().getDiameter())
+                if (getBall().getX() + stepX < 0 || getBall().getX() + stepX > getWidth() - getBall().getDiameter())    // if wall
                     stepX = -stepX;
 
-                if (getBall().getY() + stepY - paletteHeight < 0 && getBall().getX() >= getSecondPalette().getX() &&
-                        getBall().getX() <= getSecondPalette().getX() + getSecondPalette().getWidth() )
+                // if the ball will bump with upper (second) palette
+                if (getBall().getY() + stepY - paletteHeight < 0 && getBall().getX() >= getSecondPalette().getX() - getBall().getDiameter() + 1 &&
+                        getBall().getX() <= getSecondPalette().getX() + getSecondPalette().getWidth() - 1 )
+                {
                     stepY = -stepY;
+                    double ballCenter = getBall().getX() + getBall().getDiameter() / 2;
+                    double hitPlace = percentage( getSecondPalette().getX(), getSecondPalette().getX() + getSecondPalette().getWidth(), ballCenter );
+                    stepX = getStepX( hitPlace );
+
+                }
                 else
-                    if ( getBall().getY() + stepY - paletteHeight < 0 )
+                    if ( getBall().getY() + stepY - paletteHeight < 0 )     // if the ball went off
                     {
                         getBall().setX(centerX);
                         getBall().setY(centerY);
+                        stepX = ballSpeed;
+                        stepY = ballSpeed;
                     }
 
+                // if the ball will bump with lower (first) palette
                 if (getBall().getY() + getBall().getDiameter() + getFirstPalette().getHeight() >= getHeight() &&
-                      getBall().getX() >= getFirstPalette().getX() && getBall().getX() <= getFirstPalette().getX() + getFirstPalette().getWidth())
+                      getBall().getX() >= getFirstPalette().getX() - getBall().getDiameter() + 1
+                        && getBall().getX() <= getFirstPalette().getX() + getFirstPalette().getWidth())
+                {
                     stepY = -stepY;
+                    double ballCenter = getBall().getX() + getBall().getDiameter() / 2;
+                    double hitPlace = percentage( getFirstPalette().getX(), getFirstPalette().getX() + getFirstPalette().getWidth(), ballCenter );
+                    stepX = getStepX( hitPlace );
+                }
                 else
                     if ( getBall().getY() + getBall().getDiameter() + getFirstPalette().getHeight() >= getHeight() )
                     {
                         getBall().setX(centerX);
                         getBall().setY(centerY);
+                        stepX = ballSpeed;
+                        stepY = ballSpeed;
                     }
 
                 getBall().setX( getBall().getX() + stepX );
                 getBall().setY( getBall().getY() + stepY );
 
-                player.updateClientsBall();
+                player.updateClients();     // send message to clients about ball position
             }
 
         });
 
+    }
+
+    private double percentage( double from, double to, double number )          // ex: 10, 30, 20 - returns 50
+    {
+        double length = to - from;
+        double one = length / 100;
+        return (number - from) / one;
+    }
+
+    private int getStepX(double hitPl)
+    {
+        for ( int i = 0; i < stepX.length; ++i )
+            if ( hitPl <= hitPlaces[i] )
+                return stepX[i];
+
+        return 0;
     }
 }

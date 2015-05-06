@@ -1,9 +1,11 @@
 package tennis.server;
 
+import javafx.util.Pair;
+
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.Socket;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.regex.Pattern;
@@ -12,37 +14,42 @@ import static esy.es.tennis.shared.TennisAppConstants.*;
 
 public class Player implements Runnable
 {
-    private Socket connection;
+//    private Socket connection;
+    private DatagramSocket datagramSocket;
     private int playerNumber;
     private Lock lock;
     private Condition playerConnected;
-    private ObjectOutputStream output;
-    private ObjectInputStream input;
+//    private ObjectOutputStream output;
+//    private ObjectInputStream input;
     private boolean enabled = false;
     private Board board;
     private Player[] players;
+    private final InetAddress playerAddress;
+    private final int port;
 
-    public Player(Socket connection, int playerNumber, Lock lock, Condition playerConnected, Board board, Player[] players)
+    public Player(InetAddress playerAddress, int port, int playerNumber, Lock lock, Condition playerConnected, Board board, Player[] players, DatagramSocket ds)
     {
-        this.connection = connection;
+        this.playerAddress = playerAddress;
+        this.port = port;
         this.playerNumber = playerNumber;
         this.lock = lock;
         this.playerConnected = playerConnected;
         this.board = board;
         this.players = players;
+        this.datagramSocket = ds;
     }
 
     @Override
     public void run()
     {
-        try
-        {
-            getStreams();
-        }
-        catch (IOException e)
-        {
-            e.printStackTrace();
-        }
+//        try
+//        {
+//            getStreams();
+//        }
+//        catch (IOException e)
+//        {
+//            e.printStackTrace();
+//        }
 
         if ( playerNumber == 0 )    // wait until second player connects
         {
@@ -50,7 +57,8 @@ public class Player implements Runnable
 
             try
             {
-                sendMessage( notification + separator + "Waiting for second player");
+                String s = notification + separator + "Waiting for second player";
+                sendData(s.getBytes());
 
                 while (!enabled)
                     playerConnected.await();    //  wait for second player to connect
@@ -68,9 +76,9 @@ public class Player implements Runnable
         // play the game
 //        sendMessage("Welcome player " + playerNumber);
 
-        try
-        {
-            listenPlayer();
+//        try
+//        {
+            listenPlayer();     // not thread-safe
 
             try
             {
@@ -82,34 +90,47 @@ public class Player implements Runnable
                 lock.unlock();
             }
         }
-        finally
-        {
-            try
-            {
-                closeConnection();
-            }
-            catch (IOException e)
-            {
-                e.printStackTrace();
-            }
-        }
+//        finally
+//        {
+//            try
+//            {
+//                //closeConnection();
+//            }
+//            catch (IOException e)
+//            {
+//                e.printStackTrace();
+//            }
+//        }
 
-    }
+    //}
 
-    private void getStreams() throws IOException
-    {
-        output = new ObjectOutputStream( connection.getOutputStream() );
-        output.flush();
+//    private void getStreams() throws IOException
+//    {
+//        output = new ObjectOutputStream( connection.getOutputStream() );
+//        output.flush();
+//
+//        input = new ObjectInputStream(connection.getInputStream());
+//    }
 
-        input = new ObjectInputStream(connection.getInputStream());
-    }
+//    private void sendMessage( String message )
+//    {
+//        try
+//        {
+//            output.writeObject(message);
+//            output.flush();
+//        }
+//        catch (IOException e)
+//        {
+//            e.printStackTrace();
+//        }
+//    }
 
-    private void sendMessage( String message )
+    private void sendData( byte[] data )
     {
         try
         {
-            output.writeObject(message);
-            output.flush();
+            DatagramPacket toSend = new DatagramPacket(data, data.length, playerAddress, port);
+            datagramSocket.send(toSend);
         }
         catch (IOException e)
         {
@@ -122,77 +143,91 @@ public class Player implements Runnable
         this.enabled = enabled;
     }
 
+    private Pair<String, Sender> receiveMessage() throws IOException
+    {
+        byte[] buffer = new byte[100];
+        DatagramPacket receivePacket = new DatagramPacket( buffer, 0, buffer.length );
+        datagramSocket.receive(receivePacket);
+        return new Pair<>(new String(receivePacket.getData(), 0, receivePacket.getLength()),
+                new Sender(receivePacket.getAddress(), receivePacket.getPort()));
+    }
+
     private void listenPlayer()
     {
-        String message = null;
+//        String message = null;
+        Pair<String, Sender> messSender = null;
 
         do
         {
             try
             {
-                message = (String) input.readObject();
-                if (message != null)
-                {
-                    //displayMessage("Received message from player " + playerNumber + ": " + message );
-                    processMessage(message);
-                }
+                //message = (String) input.readObject();
+                messSender = receiveMessage();
+                processMessage(messSender);
             }
             catch (IOException e)
             {
-                //e.printStackTrace();
                 displayMessage("An error occurred while reading from stream (player " + playerNumber + ")");
             }
-            catch (ClassNotFoundException e)
-            {
-                //e.printStackTrace();
-                displayMessage("\nInvalid object received from player " + playerNumber);
-            }
 
-        } while (message == null || !message.equals(disconnect));
+        } while (messSender == null || !messSender.getKey().equals(disconnect));
     }
 
-    public void closeConnection() throws IOException
+    private void processMessage(Pair<String, Sender> messSender)
     {
-        output.close();
-        input.close();
-        connection.close();
-    }
-
-    private void processMessage(String message)
-    {
-        String[] data = message.split(Pattern.quote(separator));
+        String[] data = messSender.getKey().split(Pattern.quote(separator));
 
         if (data.length > 0)
         {
             switch (data[0])
             {
                 case movePaletteLeft:
-                    movePalette(movePaletteLeft);
+                    movePalette(movePaletteLeft, messSender.getValue());
                     updateClients();
                     break;
                 case movePaletteRight:
-                    movePalette(movePaletteRight);
+                    movePalette(movePaletteRight, messSender.getValue());
                     updateClients();
                     break;
             }
         }
     }
 
-    private void movePalette( String direction )
+    private void movePalette(String direction, Sender sender)
     {
         if (direction.equals(movePaletteLeft))
         {
-            if (playerNumber == 0)
-                board.getFirstPalette().setX( board.getFirstPalette().getX() - moveSpeed );
+            if (players[0].playerAddress.equals(sender.address) && players[0].port == sender.getPortNumber())   // player 0 is the sender
+                for ( int i = 0; i < moveSpeed; ++i)
+                {
+                    board.getFirstPalette().setX(board.getFirstPalette().getX() - 1);
+                    delay(3);
+                    updateClients();
+                }
             else
-                board.getSecondPalette().setX( board.getSecondPalette().getX() - moveSpeed );
+                for ( int i = 0; i < moveSpeed; ++i)
+                {
+                    board.getSecondPalette().setX(board.getSecondPalette().getX() - 1);
+                    delay(3);
+                    updateClients();
+                }
         }
         else
         {
-            if (playerNumber == 0)
-                board.getFirstPalette().setX( board.getFirstPalette().getX() + moveSpeed );
+            if (players[0].playerAddress.equals(sender.address) && players[0].port == sender.getPortNumber())   // player 0
+                for (int i = 0; i < moveSpeed; ++i)
+                {
+                    board.getFirstPalette().setX( board.getFirstPalette().getX() + 1 );
+                    delay(3);
+                    updateClients();
+                }
             else
-                board.getSecondPalette().setX( board.getSecondPalette().getX() + moveSpeed );
+                for (int i = 0; i < moveSpeed; ++i)
+                {
+                    board.getSecondPalette().setX(board.getSecondPalette().getX() + 1);
+                    delay(3);
+                    updateClients();
+                }
         }
     }
 
@@ -202,15 +237,28 @@ public class Player implements Runnable
 
         String message = updateBoard + separator + board.getBall().getX() + separator + board.getBall().getY() + separator +
                 board.getFirstPalette().getX() + separator + board.getSecondPalette().getX();
+        byte[] bytes = message.getBytes();
 
         try
         {
-            players[0].sendMessage( message );
-            players[1].sendMessage( message );
+            players[0].sendData(bytes);
+            players[1].sendData(bytes);
         }
         finally
         {
             lock.unlock();
+        }
+    }
+
+    private void delay( int millis )
+    {
+        try
+        {
+            Thread.sleep(millis);
+        }
+        catch (InterruptedException e)
+        {
+            e.printStackTrace();
         }
     }
 
@@ -218,21 +266,44 @@ public class Player implements Runnable
     {
         lock.lock();
 
-        String message = ballMove + separator + board.getBall().getX() + separator + board.getBall().getY();
         try
         {
-            players[0].sendMessage( message );
-            players[1].sendMessage( message );
+            String message = ballMove + separator + board.getBall().getX() + separator + board.getBall().getY();
+            byte[] bytes = message.getBytes();
+
+            players[0].sendData(bytes);
+            players[1].sendData(bytes);
         }
         finally
         {
             lock.unlock();
         }
-
     }
 
     private void displayMessage( String message )
     {
         System.out.println(message);
+    }
+
+    private class Sender
+    {
+        private final InetAddress address;
+        private final int portNumber;
+
+        public Sender( InetAddress address, int portNumber )
+        {
+            this.address = address;
+            this.portNumber = portNumber;
+        }
+
+        public InetAddress getAddress()
+        {
+            return address;
+        }
+
+        public int getPortNumber()
+        {
+            return portNumber;
+        }
     }
 }
