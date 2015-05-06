@@ -1,19 +1,25 @@
 package tennis.server;
 
+import javafx.util.Pair;
+
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import static esy.es.tennis.shared.TennisAppConstants.*;
+
+import static esy.es.tennis.shared.TennisAppConstants.UDP_PORT_NUMBER;
 
 public class TennisServer
 {
     private ExecutorService executorService;
     private Player[] players;
-    private ServerSocket server;
+    //private ServerSocket server;
+    private DatagramSocket serverSocket;
     private Lock lock;
     private Condition playerConnected;
     private Board board;
@@ -28,7 +34,8 @@ public class TennisServer
 
         try
         {
-            server = new ServerSocket( PORT_NUMBER, 2 );
+            //server = new ServerSocket( PORT_NUMBER, 2 );
+            serverSocket = new DatagramSocket( UDP_PORT_NUMBER );
         }
         catch (IOException e)
         {
@@ -38,13 +45,23 @@ public class TennisServer
         }
     }
 
+    private Pair<InetAddress, Integer> getPlayerAddress() throws IOException
+    {
+            byte[] data = new byte[10];
+            DatagramPacket packet = new DatagramPacket(data, 0, data.length);
+            serverSocket.receive(packet);
+            InetAddress host = packet.getAddress();
+            return new Pair<InetAddress, Integer>(host, packet.getPort());
+    }
+
     public void runServer()
     {
             try
             {
                 for ( int i = 0; i < players.length; ++i)
                 {
-                    players[i] = new Player(server.accept(), i, lock, playerConnected, board, players);
+                    Pair<InetAddress, Integer> playerData = getPlayerAddress();
+                    players[i] = new Player(playerData.getKey(), playerData.getValue(), i, lock, playerConnected, board, players, serverSocket);
                     executorService.execute(players[i]);
                 }
 
