@@ -24,7 +24,7 @@ public class Board
         height = boardHeight;
         firstPalette = new Palette(boardWidth / 2 - paletteWidth / 2, boardHeight - paletteHeight * 2, paletteWidth, paletteHeight);
         secondPalette = new Palette(boardWidth / 2 - paletteWidth / 2, 0, paletteWidth, paletteHeight);
-        ball = new Ball(boardWidth / 2 - ballDiameter / 2, boardHeight / 2 - ballDiameter / 2, ballDiameter);
+        ball = new Ball(boardWidth / 2 - ballDiameter / 2, boardHeight / 2 - ballDiameter / 2, ballDiameter, ballSpeed, ballSpeed);
     }
 
     public Ball getBall()
@@ -77,20 +77,21 @@ public class Board
         this.ball = ball;
     }
 
-    public void moveBall( Player player )
+    public void moveBall( Game game )
     {
 
         executorService.execute(() -> {
-            int stepX = ballSpeed;
-            int stepY = ballSpeed;
-            int centerX = boardWidth / 2 - ballDiameter / 2;
-            int centerY = boardHeight / 2 - ballDiameter / 2;
+            final int centerX = boardWidth / 2 - ballDiameter / 2;
+            final int centerY = boardHeight / 2 - ballDiameter / 2;
 
             while ( getBall().isMoving() )
             {
+                int stepX = getBall().getSpeedX();
+                int stepY = getBall().getSpeedY();
+
                 try
                 {
-                    Thread.sleep(5);
+                    Thread.sleep(7);
                 }
                 catch (InterruptedException e)
                 {
@@ -138,14 +139,16 @@ public class Board
                         stepY = ballSpeed;
                     }
 
-                getBall().setX( getBall().getX() + stepX );
-                getBall().setY( getBall().getY() + stepY );
+                getBall().setX(getBall().getX() + stepX);
+                getBall().setY(getBall().getY() + stepY);
 
-                player.updateClients();     // send message to clients about ball position
+                //player.updateClients();     // send message to clients about ball position
+                getBall().setSpeedX(stepX);
+                getBall().setSpeedY(stepY);
+
+               game.updateClients();
             }
-
         });
-
     }
 
     private double percentage( double from, double to, double number )          // ex: 10, 30, 20 - returns 50

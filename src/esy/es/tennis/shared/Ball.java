@@ -1,7 +1,5 @@
 package esy.es.tennis.shared;
 
-import java.awt.*;
-
 /**
  * abstract tennis ball
  */
@@ -11,12 +9,16 @@ public class Ball
     private int y;
     private int diameter;
     private boolean isMoving = false;
+    private int speedX;
+    private int speedY;
 
-    public Ball(int x, int y, int diameter)
+    public Ball(int x, int y, int diameter, int speedX, int speedY)
     {
         this.x = x;
         this.y = y;
         this.diameter = diameter;
+        this.speedX = speedX;
+        this.speedY = speedY;
     }
 
     public int getX()
@@ -58,5 +60,25 @@ public class Ball
     {
         return isMoving;
 
+    }
+
+    public int getSpeedY()
+    {
+        return speedY;
+    }
+
+    public void setSpeedY(int speedY)
+    {
+        this.speedY = speedY;
+    }
+
+    public int getSpeedX()
+    {
+        return speedX;
+    }
+
+    public void setSpeedX(int speedX)
+    {
+        this.speedX = speedX;
     }
 }
